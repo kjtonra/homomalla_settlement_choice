@@ -1,7 +1,0 @@
-"0","day6_settlement <- settlement_counts %>%"
-"0","  mutate(bare = bt + bs + bb,"
-"0","         cca = ct + cs + cb,"
-"0","         ram = rt + rs + rb,"
-"0","         spon = ot + os + ob) %>% #add up settlers on each substratum"
-"0","  filter(day == settlement_day) %>% #isolate settlement day data"
-"0","  select(-position:-ob) #remove extra columns"
