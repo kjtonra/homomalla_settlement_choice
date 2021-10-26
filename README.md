@@ -9,7 +9,8 @@ In complex marine habitats like the intertidal zone and coral reefs, the specifi
 
 ### File structure
 #### data
-This folder contains the .csv files associated with our analyses and results. There are three: 1. annotations.csv contains point count data from [CoralNet](https://coralnet.ucsd.edu/). This contains a row for each individual point that was annotated. 2. counts.csv contains data for 
+This folder contains the .csv files associated with our analyses and results. There are three: 1. annotations.csv contains point count data from [CoralNet](https://coralnet.ucsd.edu/). This contains a row for each individual point that was annotated. 2. counts.csv contains data for each container and piece of rubble, including how many polyps were settled on each substratum type or rubble type. 3. areas.csv contains size data for each piece of rubble. We measured heights in the field and used photos of the top and bottom of each piece to find the perimeter and area of each side. These data are used for calculating the total surface area to be used in finding electivity indices.
 
 #### analyses
-
+This folder contains R script files with analyses that were used. 
+(Include more information about those here) 
