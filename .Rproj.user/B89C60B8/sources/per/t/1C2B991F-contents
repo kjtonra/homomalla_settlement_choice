@@ -1,0 +1,374 @@
+---
+title: "Data Analysis"
+author: "Christopher D. Wells"
+date: "1/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(boot) #load for bootstrapping
+library(vegan) #load for PERMANOVA
+
+library(tidyverse)
+library(grid)
+library(gridExtra)
+
+samplemedian <- function(x, d) {return(median(x[d]))} #create a bootstrapping function
+electivity_plot <- list(
+  ylim(-1,1),
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5))
+electivity_theme <- function(){
+  theme(axis.title = element_text (size = 10),
+        axis.text = element_text (size = 10, color = "black"),
+        panel.background = element_blank (),
+        panel.grid.major = element_blank (),
+        panel.grid.minor = element_blank (),
+        plot.background = element_blank (),
+        axis.line = element_line(size = 0.5, linetype = "solid", color = "black"),
+        axis.ticks = element_line(size = 0.5, linetype = "solid", color = "black"),
+        legend.position = "none")}
+bootstrap <- 10000 #number of bootstraps
+permutations <- 99999 #number of permutations
+rubble_types <- 3 #number of different rubble types in the experiment
+substratum_types <- 4 #number of substratum types from coralnet
+settlement_day <- 6 #day chosen for the settlement electivity calculations
+mortality_start <- 12 #first day to fit mortality rate to
+mortality_end <- 26 #last day to fit mortality rate to
+```
+
+```{r import}
+settlement_counts <- read_csv("settlement_counts.csv",
+                              col_types = cols(day = col_double(),
+                                               container = col_character(),
+                                               rubble_type = col_character(),
+                                               position = col_character(),
+                                               bt = col_double(),
+                                               ct = col_double(),
+                                               rt = col_double(),
+                                               ot = col_double(),
+                                               bs = col_double(),
+                                               cs = col_double(),
+                                               rs = col_double(),
+                                               os = col_double(),
+                                               bb = col_double(),
+                                               cb = col_double(),
+                                               rb = col_double(),
+                                               ob = col_double())) #number of corals on each substratum type each day (raw data)
+rubble_area <- read_csv("rubble_area.csv",
+                        col_types = cols(container = col_character(),
+                                         cca = col_double(),
+                                         bare = col_double(),
+                                         ram = col_double())) #calculated area of each rubble (from data prep)
+patch_type_area <- read_csv("patch_type_area.csv",
+                            col_types = cols(container = col_double(),
+                                             bare = col_double(),
+                                             cca = col_double(),
+                                             ram = col_double(),
+                                             spon = col_double())) #calculated area of each substratum type in a container (from data prep)
+```
+
+```{r isolate settlement day}
+day6_settlement <- settlement_counts %>%
+  mutate(bare = bt + bs + bb,
+         cca = ct + cs + cb,
+         ram = rt + rs + rb,
+         spon = ot + os + ob) %>% #add up settlers on each substratum
+  filter(day == settlement_day) %>% #isolate settlement day data
+  select(-position:-ob) #remove extra columns
+```
+
+```{r calculate rubble electivities}
+rubble_electivity <- day6_settlement %>%
+  mutate(total = bare + cca + ram + spon) %>% #get total settlers
+  group_by(container, rubble_type) %>%
+  summarize(total = sum(total)) %>% #arrange data organized by container and rubble type
+  pivot_wider(names_from = rubble_type, values_from = total) %>% #widen the table
+  merge(., rubble_area, by = "container") %>% #add the rubble_area df
+  mutate(bare = bare.x/bare.y,
+         cca = cca.x/cca.y,
+         ram = ram.x/ram.y) %>% #calculate proportion of settlers on each substratum
+  mutate(bare_a = bare / (bare + cca + ram),
+         cca_a = cca / (bare + cca + ram),
+         ram_a = ram / (bare + cca + ram)) %>% #calculate Chesson's alpha
+  mutate(bare_e = (bare_a - 1 / rubble_types) / (bare_a + 1 / rubble_types),
+         cca_e = (cca_a - 1 / rubble_types) / (cca_a + 1 / rubble_types),
+         ram_e = (ram_a - 1 / rubble_types) / (ram_a + 1 / rubble_types)) %>% #calculate electivities
+  select(ends_with(c("container", "e")), -bare) %>% #remove extraneous columns
+  drop_na() #drop na's (the three containers that only have one rubble type)
+```
+
+```{r calculate patch electivities}
+patch_electivity <- day6_settlement %>%
+  group_by(container) %>%
+  summarize(bare = sum(bare),
+            cca = sum(cca),
+            ram = sum(ram),
+            spon = sum(spon)) %>%
+  merge(., patch_type_area, by = "container") %>% #add the rubble_area df
+  mutate(bare = bare.x/bare.y,
+         cca = cca.x/cca.y,
+         ram = ram.x/ram.y,
+         spon = spon.x/spon.y) %>% #calculate proportion of settlers on each substratum
+  mutate(bare_a = bare / (bare + cca + ram + spon),
+         cca_a = cca / (bare + cca + ram + spon),
+         ram_a = ram / (bare + cca + ram + spon),
+         spon_a = spon / (bare + cca + ram + spon)) %>% #calculate Chesson's alpha
+  mutate(bare_e = (bare_a - 1 / substratum_types) / (bare_a + 1 / substratum_types),
+         cca_e = (cca_a - 1 / substratum_types) / (cca_a + 1 / substratum_types),
+         ram_e = (ram_a - 1 / substratum_types) / (ram_a + 1 / substratum_types),
+         spon_e = (spon_a - 1 / substratum_types) / (spon_a + 1 / substratum_types)) %>% #calculate electivities
+  select(ends_with(c("container", "e")), -bare) %>% #remove extraneous columns
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r Bring in every dataset, message = FALSE, echo = FALSE}
+rubble_electivity          <- read_csv("rubbleelectivity.csv")
+patch_electivity           <- read_csv("patchelectivity.csv")
+patch_electivity_other     <- drop_na(patch_electivity)
+rubble_electivity_type     <- read_csv("rubbleelectivitytype.csv", col_types = cols(container = col_character()))
+patch_electivity_type      <- read_csv("patchelectivitytype.csv", col_types = cols(container = col_character()))
+patch_electivity_type$type <- fct_relevel(patch_electivity_type$type, "bare", "cca", "ram", "other")
+rubble_mortality           <- read_csv("mortality.csv", col_types = cols(container = col_character()))
+rubble_mortality           <- drop_na(rubble_mortality, rmortality)
+patch_mortality            <- read_csv("mortality.csv", col_types = cols(container = col_character()))
+patch_mortality            <- drop_na(patch_mortality, pmortality)
+patch_electivity_median    <- data.frame("type"= c("bare", "cca", "ram", "other"), "median" = 999, "min" = 999, "max" = 999)
+rubble_electivity_median   <- patch_electivity_median[-c(4),]
+rubble_mortality_median    <- rubble_electivity_median
+patch_mortality_median     <- rubble_electivity_median
+```
+
+#### **Electivity calculations**
+##### Rubble-level electivities
+###### Summary and CIs
+```{r Rubble electivity summary and CIs, message = FALSE, echo = FALSE, cache = TRUE}
+rubble_elect_boot_bare  <- boot(rubble_electivity$e_bare, samplemedian, R=bootstrap) #bootstrap
+rubble_elect_boot_cca   <- boot(rubble_electivity$e_cca, samplemedian, R=bootstrap)
+rubble_elect_boot_ram   <- boot(rubble_electivity$e_ram, samplemedian, R=bootstrap)
+rubble_elect_ci_bare    <- boot.ci(rubble_elect_boot_bare, conf = 0.95, type = "norm") #get the 95% CI from the bootstraps
+rubble_elect_ci_cca     <- boot.ci(rubble_elect_boot_cca, conf = 0.95, type = "norm")
+rubble_elect_ci_ram     <- boot.ci(rubble_elect_boot_ram, conf = 0.95, type = "norm")
+
+rubble_electivity_median$median[1] <- median(rubble_electivity$e_bare)
+rubble_electivity_median$median[2] <- median(rubble_electivity$e_cca)
+rubble_electivity_median$median[3] <- median(rubble_electivity$e_ram)
+rubble_electivity_median$min[1]    <- if(rubble_elect_ci_bare$normal[2] < -1) {-1} else {rubble_elect_ci_bare$normal[2]}
+rubble_electivity_median$min[2]    <- if(rubble_elect_ci_cca$normal[2] < -1) {-1} else {rubble_elect_ci_cca$normal[2]}
+rubble_electivity_median$min[3]    <- if(rubble_elect_ci_ram$normal[2] < -1) {-1} else {rubble_elect_ci_ram$normal[2]}
+rubble_electivity_median$max[1]    <- if(rubble_elect_ci_bare$normal[3] > 1) {1} else {rubble_elect_ci_bare$normal[3]}
+rubble_electivity_median$max[2]    <- if(rubble_elect_ci_cca$normal[3] > 1) {1} else {rubble_elect_ci_cca$normal[3]}
+rubble_electivity_median$max[3]    <- if(rubble_elect_ci_ram$normal[3] > 1) {1} else {rubble_elect_ci_ram$normal[3]}
+
+rubble_electivity_median
+
+rm(rubble_elect_boot_bare, rubble_elect_boot_cca, rubble_elect_boot_ram, rubble_elect_ci_bare, rubble_elect_ci_cca, rubble_elect_ci_ram)
+```
+
+###### PERMANOVA
+```{r Rubble electivity PERMANOVA, message = FALSE, echo = FALSE}
+rubble_elect_perm <- adonis(electivity ~ type, data = rubble_electivity_type, method = "euclidean", permutations = permutations, strata = rubble_electivity_type$container)
+rubble_elect_perm
+
+rm(rubble_elect_perm)
+```
+
+##### Patch-level electivities
+###### Summary and CIs
+```{r Patch electivity summary and CIs, message = FALSE, echo = FALSE, cache = TRUE}
+patch_elect_boot_bare  <- boot(patch_electivity$e_bare, samplemedian, R=bootstrap) #bootstrap
+patch_elect_boot_cca   <- boot(patch_electivity$e_cca, samplemedian, R=bootstrap)
+patch_elect_boot_ram   <- boot(patch_electivity$e_ram, samplemedian, R=bootstrap)
+patch_elect_boot_other <- boot(patch_electivity_other$e_other, samplemedian, R=bootstrap)
+patch_elect_ci_bare    <- boot.ci(patch_elect_boot_bare, conf = 0.95, type = "norm") #get the 95% CI from the bootstraps
+patch_elect_ci_cca     <- boot.ci(patch_elect_boot_cca, conf = 0.95, type = "norm")
+patch_elect_ci_ram     <- boot.ci(patch_elect_boot_ram, conf = 0.95, type = "norm")
+patch_elect_ci_other   <- boot.ci(patch_elect_boot_other, conf = 0.95, type = "norm")
+
+patch_electivity_median$median[1] <- median(patch_electivity$e_bare)
+patch_electivity_median$median[2] <- median(patch_electivity$e_cca)
+patch_electivity_median$median[3] <- median(patch_electivity$e_ram)
+patch_electivity_median$median[4] <- median(patch_electivity_other$e_other)
+patch_electivity_median$min[1]    <- if(patch_elect_ci_bare$normal[2] < -1) {-1} else {patch_elect_ci_bare$normal[2]}
+patch_electivity_median$min[2]    <- if(patch_elect_ci_cca$normal[2] < -1) {-1} else {patch_elect_ci_cca$normal[2]}
+patch_electivity_median$min[3]    <- if(patch_elect_ci_ram$normal[2] < -1) {-1} else {patch_elect_ci_ram$normal[2]}
+patch_electivity_median$min[4]    <- if(patch_elect_ci_other$normal[2] < -1) {-1} else {patch_elect_ci_other$normal[2]}
+patch_electivity_median$max[1]    <- if(patch_elect_ci_bare$normal[3] > 1) {1} else {patch_elect_ci_bare$normal[3]}
+patch_electivity_median$max[2]    <- if(patch_elect_ci_cca$normal[3] > 1) {1} else {patch_elect_ci_cca$normal[3]}
+patch_electivity_median$max[3]    <- if(patch_elect_ci_ram$normal[3] > 1) {1} else {patch_elect_ci_ram$normal[3]}
+patch_electivity_median$max[4]    <- if(patch_elect_ci_other$normal[3] > 1) {1} else {patch_elect_ci_other$normal[3]}
+
+patch_electivity_median
+
+rm(patch_elect_boot_bare, patch_elect_boot_cca, patch_elect_boot_ram, patch_elect_boot_other, patch_elect_ci_bare, patch_elect_ci_cca, patch_elect_ci_ram, patch_elect_ci_other)
+```
+
+###### PERMANOVA
+```{r Patch electivity PERMANOVA, message = FALSE, echo = FALSE}
+patch_elect_perm <- adonis(electivity ~ type, data = patch_electivity_type, method = "euclidean", permutations = permutations, strata = patch_electivity_type$container)
+patch_elect_perm
+
+rm(patch_elect_perm)
+```
+##### Figure summary of electivity calculations
+
+```{r Electivity plots, message = FALSE, echo = FALSE, fig.width = 6.5, fig.height = 2.9, fig.align = "center"}
+electivity_plot <- list(
+  ylim(-1,1),
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5))
+
+electivity_theme <- function(){
+  theme(axis.title = element_text (size = 10),
+        axis.text = element_text (size = 10, color = "black"),
+        panel.background = element_blank (),
+        panel.grid.major = element_blank (),
+        panel.grid.minor = element_blank (),
+        plot.background = element_blank (),
+        axis.line = element_line(size = 0.5, linetype = "solid", color = "black"),
+        axis.ticks = element_line(size = 0.5, linetype = "solid", color = "black"),
+        legend.position = "none")}
+
+plot.elect.rubble <- ggplot(rubble_electivity_type, aes (x = type, y = electivity)) +
+  geom_jitter(data = rubble_electivity_type, cex = 3, stroke = 0.6, shape = 21, aes(x = type, y = electivity, fill = type), position = position_jitter(width = 0.15, height = 0)) +
+  geom_errorbar(data = rubble_electivity_median, width = 0.2, aes(y = median, ymin = min, ymax = max)) +
+  scale_fill_manual(values = c("#DF6262", "#4EB24E", "#3B8686")) +
+  labs(x = "Rubble type", y = "Electivity", tag = "A") +
+  scale_x_discrete(labels = expression(Bare, CCA, italic("Ramicrusta"))) +
+  electivity_plot +
+  electivity_theme()
+
+plot.elect.patch <- ggplot(patch_electivity_type, aes (x = type, y = electivity)) +
+  geom_jitter(data = patch_electivity_type, cex = 3, stroke = 0.6, shape = 21, aes(x = type, y = electivity, fill = type), position = position_jitter(width = 0.15, height = 0)) +
+  geom_errorbar(data = patch_electivity_median, width = 0.2, aes(y = median, ymin = min, ymax = max)) +
+  scale_fill_manual(values = c("#DF6262", "#4EB24E", "#3B8686", "#DF9B62")) +
+  labs(x = "Patch type", y = "", tag = "B") +
+  scale_x_discrete(labels = expression(Bare, CCA, italic("Ramicrusta"), Other)) +
+  electivity_plot +
+  electivity_theme()
+
+plot.elect <- grid.arrange(plot.elect.rubble, plot.elect.patch, nrow = 1, widths = c(3, 3.5), heights = 2.9)
+
+ggsave(plot = plot.elect, "fig.elect.tiff", units = "in", width = 6.5, height = 2.9, dpi = 600, compression = "lzw")
+
+rm(electivity_plot, electivity_theme, plot.elect.rubble, plot.elect.patch, plot.elect)
+```
+
+###### Settlement electivity of *Plexaura homomalla* planulae for (A) rubble-level and (B) patch-level substrata. Values are median electivity with 95% bootstrapped confidence intervals. Electivity confidence intervals above zero indicate preference and below zero indicate avoidance of a substratum.
+
+#### **Mortality calculations**
+##### Rubble-level mortality
+###### Summary and CIs
+```{r Rubble mortality summary and CIs, message = FALSE, echo = FALSE, cache = TRUE}
+rubble_mort_boot_bare <- boot(rubble_mortality$rmortality[rubble_mortality$type == "bare"], samplemedian, R=bootstrap) #bootstrap
+rubble_mort_boot_cca  <- boot(rubble_mortality$rmortality[rubble_mortality$type == "cca"], samplemedian, R=bootstrap)
+rubble_mort_boot_ram  <- boot(rubble_mortality$rmortality[rubble_mortality$type == "ram"], samplemedian, R=bootstrap)
+rubble_mort_ci_bare   <- boot.ci(rubble_mort_boot_bare, conf = 0.95, type = "norm") #get the 95% CI from the bootstraps
+rubble_mort_ci_cca    <- boot.ci(rubble_mort_boot_cca, conf = 0.95, type = "norm")
+rubble_mort_ci_ram    <- boot.ci(rubble_mort_boot_ram, conf = 0.95, type = "norm")
+
+rubble_mortality_median$median[1] <- median(rubble_mortality$rmortality[rubble_mortality$type == "bare"])
+rubble_mortality_median$median[2] <- median(rubble_mortality$rmortality[rubble_mortality$type == "cca"])
+rubble_mortality_median$median[3] <- median(rubble_mortality$rmortality[rubble_mortality$type == "ram"])
+rubble_mortality_median$min[1]    <- rubble_mort_ci_bare$normal[2]
+rubble_mortality_median$min[2]    <- rubble_mort_ci_cca$normal[2]
+rubble_mortality_median$min[3]    <- rubble_mort_ci_ram$normal[2]
+rubble_mortality_median$max[1]    <- rubble_mort_ci_bare$normal[3]
+rubble_mortality_median$max[2]    <- rubble_mort_ci_cca$normal[3]
+rubble_mortality_median$max[3]    <- rubble_mort_ci_ram$normal[3]
+
+rubble_mortality_median
+
+rm(rubble_mort_boot_bare, rubble_mort_boot_cca, rubble_mort_boot_ram, rubble_mort_ci_bare, rubble_mort_ci_cca, rubble_mort_ci_ram)
+```
+
+###### PERMANOVA
+```{r Rubble mortality PERMANOVA, message = FALSE, echo = FALSE}
+rubble_mort_perm <- adonis(rmortality ~ type, data = rubble_mortality, method = "euclidean", permutations = permutations, strata = rubble_mortality$container)
+rubble_mort_perm
+
+rm(rubble_mort_perm)
+```
+##### Patch-level mortality
+###### Summary and CIs
+```{r Patch mortality summary and CIs, message = FALSE, echo = FALSE, cache = TRUE}
+patch_mort_boot_bare <- boot(patch_mortality$pmortality[patch_mortality$type == "bare"], samplemedian, R=bootstrap) #bootstrap
+patch_mort_boot_cca  <- boot(patch_mortality$pmortality[patch_mortality$type == "cca"], samplemedian, R=bootstrap)
+patch_mort_boot_ram  <- boot(patch_mortality$pmortality[patch_mortality$type == "ram"], samplemedian, R=bootstrap)
+patch_mort_ci_bare   <- boot.ci(patch_mort_boot_bare, conf = 0.95, type = "norm") #get the 95% CI from the bootstraps
+patch_mort_ci_cca    <- boot.ci(patch_mort_boot_cca, conf = 0.95, type = "norm")
+patch_mort_ci_ram    <- boot.ci(patch_mort_boot_ram, conf = 0.95, type = "norm")
+
+patch_mortality_median$median[1] <- median(patch_mortality$pmortality[patch_mortality$type == "bare"])
+patch_mortality_median$median[2] <- median(patch_mortality$pmortality[patch_mortality$type == "cca"])
+patch_mortality_median$median[3] <- median(patch_mortality$pmortality[patch_mortality$type == "ram"])
+patch_mortality_median$min[1]    <- patch_mort_ci_bare$normal[2]
+patch_mortality_median$min[2]    <- patch_mort_ci_cca$normal[2]
+patch_mortality_median$min[3]    <- patch_mort_ci_ram$normal[2]
+patch_mortality_median$max[1]    <- patch_mort_ci_bare$normal[3]
+patch_mortality_median$max[2]    <- patch_mort_ci_cca$normal[3]
+patch_mortality_median$max[3]    <- patch_mort_ci_ram$normal[3]
+
+patch_mortality_median
+
+rm(patch_mort_boot_bare, patch_mort_boot_cca, patch_mort_boot_ram, patch_mort_ci_bare, patch_mort_ci_cca, patch_mort_ci_ram)
+```
+
+###### PERMANOVA
+```{r Patch mortality PERMANOVA, message = FALSE, echo = FALSE}
+patch_mort_perm <- adonis(pmortality ~ type, data = patch_mortality, method = "euclidean", permutations = permutations, strata = patch_mortality$container)
+patch_mort_perm
+
+rm(patch_mort_perm)
+```
+
+##### Figure summary of mortality calculations
+```{r Mortality plots, message = FALSE, echo = FALSE, fig.width = 6, fig.height = 2.9, fig.align = "center"}
+mortality_plot <- list(
+  ylim(-0.05, 0.10),
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5))
+
+mortality_theme <- function(){
+  theme(axis.title = element_text (size = 10),
+        axis.text = element_text (size = 10, color = "black"),
+        panel.background = element_blank (),
+        panel.grid.major = element_blank (),
+        panel.grid.minor = element_blank (),
+        plot.background = element_blank (),
+        axis.line = element_line(size = 0.5, linetype = "solid", color = "black"),
+        axis.ticks = element_line(size = 0.5, linetype = "solid", color = "black"),
+        legend.position = "none")}
+
+plot.mort.rubble <- ggplot(rubble_mortality, aes (x = type, y = rmortality)) +
+  geom_jitter(data = rubble_mortality,cex = 3, stroke = 0.6, shape = 21, aes(x = type, y = rmortality, fill = type), position = position_jitter(width = 0.15, height = 0)) +
+  geom_errorbar(data = rubble_mortality_median, width = 0.2, aes(y = median, ymin = min, ymax = max)) +
+  scale_fill_manual(values = c("#DF6262", "#4EB24E", "#3B8686")) +
+  labs(x = "Rubble type", y = "Mortality (proportion/day)", tag = "A") +
+  scale_x_discrete(labels = expression(Bare, CCA, italic("Ramicrusta"))) +
+  mortality_plot +
+  mortality_theme()
+
+plot.mort.patch <- ggplot(patch_mortality, aes (x = type, y = pmortality)) +
+  geom_jitter(data = patch_mortality, cex = 3, stroke = 0.6, shape = 21, aes(x = type, y = pmortality, fill = type), position = position_jitter(width = 0.15, height = 0)) +
+  geom_errorbar(data = patch_mortality_median, width = 0.2, aes(y = median, ymin = min, ymax = max)) +
+  scale_fill_manual(values = c("#DF6262", "#4EB24E", "#3B8686")) +
+  labs(x = "Patch type", y = "", tag = "B") +
+  scale_x_discrete(labels = expression(Bare, CCA, italic("Ramicrusta"))) +
+  mortality_plot +
+  mortality_theme()
+
+plot.mort <- grid.arrange(plot.mort.rubble, plot.mort.patch, nrow = 1, widths = c(3, 3), heights = 2.9)
+
+ggsave(plot = plot.mort, "fig.mort.tiff", units = "in", width = 6, height = 2.9, dpi = 600, compression = "lzw")
+
+rm(mortality_plot, mortality_theme, plot.mort.rubble, plot.mort.patch, plot.mort)
+```
+
+###### Mortality rates of *Plexaura homomalla* primary polyps for (A) rubble-level and (B) patch-level substrata. Values are median mortality rates with 95% bootstrapped confidence intervals.

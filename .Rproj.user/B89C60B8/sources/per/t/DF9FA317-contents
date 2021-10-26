@@ -1,0 +1,143 @@
+---
+title: "homomalla_data_prep"
+author: "Kaitlyn Tonra & Christopher D. Wells"
+date: "10/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+```{r import}
+cnet <- read_csv("coralnet_annotations.csv", 
+                 col_types = cols(name = col_character(),
+                                  rubble_type = col_character(),
+                                  side = col_character(),
+                                  container = col_character(),
+                                  row = col_double(),
+                                  column = col_double(),
+                                  label = col_character())) #coralnet annotations
+size <- read_csv("size_data.csv",
+                 col_types = cols(container = col_character(),
+                                  rubble_type = col_character(),
+                                  hgt1 = col_double(), 
+                                  hgt2 = col_double(),
+                                  hgt3 = col_double(),
+                                  hgt4 = col_double(),
+                                  perim_bot1 = col_double(),
+                                  perim_bot2 = col_double(),
+                                  perim_bot3 = col_double(),
+                                  perim_top1 = col_double(),
+                                  perim_top2 = col_double(),
+                                  perim_top3 = col_double(),
+                                  area_bot1 = col_double(),
+                                  area_bot2 = col_double(),
+                                  area_bot3 = col_double(),
+                                  area_top1 = col_double(),
+                                  area_top2 = col_double(),
+                                  area_top3 = col_double())) #area, perimeter, and heights of all of the rubble
+```
+
+```{r proportion of rubble surfaces}
+prop <- cnet %>%
+  group_by(container, rubble_type) %>%
+  summarize(bare_bot = sum(label == "bb"),
+            cca_bot = sum(label == "cb"),
+            ram_bot = sum(label == "rb"),
+            spon_bot = sum(label == "ob"),
+            bare_side = sum(label == "bs"),
+            cca_side = sum(label == "cs"),
+            ram_side = sum(label == "rs"),
+            spon_side = sum(label == "os"),
+            bare_top = sum(label == "bt"),
+            cca_top = sum(label == "ct"),
+            ram_top = sum(label == "rt"),
+            spon_top = sum(label == "ot")) %>% #count how many of each label for each rubble in a container
+  mutate(total_bot = bare_bot + cca_bot + ram_bot + spon_bot,
+         total_side = bare_side + cca_side + ram_side + spon_side,
+         total_top = bare_top + cca_top + ram_top + spon_top, #get total columns
+         across(c(2:5), .fns = ~./total_bot),
+         across(c(6:9), .fns = ~./total_side),
+         across(c(10:13), .fns = ~./total_top)) %>% #get proportions
+  select(-total_bot, -total_side, -total_top) #remove extra columns
+```
+
+```{r area of each side}
+area <- size %>%
+  mutate(area_bot = rowMeans(select(., area_bot1, area_bot2, area_bot3), na.rm = TRUE), #bottom area
+         area_top = rowMeans(select(., area_top1, area_top2, area_top3), na.rm = TRUE), #top area
+         per_bot = rowMeans(select(., perim_bot1, perim_bot2, perim_bot3), na.rm = TRUE), #perim of bottom
+         per_top = rowMeans(select(., perim_top1, perim_top2, perim_top3), na.rm = TRUE), #perim of top
+         height = rowMeans(select(., hgt1, hgt2, hgt3, hgt4), na.rm = TRUE)) %>% #height
+  mutate(area_side = height * rowMeans(select(., per_bot, per_top)), #side area
+         area_total = area_bot + area_top + area_side) %>% #total area
+  select(-per_bot, -per_top, -height, -ends_with(c("1", "2", "3", "4"))) #remove extra columns
+```
+
+```{r area of each rubble}
+container_area <- area %>%
+  select(c("container", "area_total")) %>% #only use two of the columns
+  group_by(container) %>%
+  summarize(area = sum(area_total)) #group by container and add all areas together 
+rubble_area <- area %>%
+  select(c("container", "rubble_type", "area_total")) %>% #only keep a few columns
+  merge(., container_area, by = "container") %>% #give a total area for each container
+  mutate(area_total = area_total / area) %>% #and then divide each rubble area to get proportion
+  select(-area) %>% #remove the total area column
+  pivot_wider(names_from = rubble_type, values_from = area_total, )
+```
+
+```{r area of each patch type}
+patch_type_area <- prop %>%
+  merge(., area, by = c("container", "rubble_type")) %>% #merge the dataframes
+  select(ends_with(c("container", "type", "bot", "top", "side", "total"))) %>% #cut out a lot of columns
+  mutate(bare_bot = bare_bot * area_bot,
+         cca_bot = cca_bot * area_bot,
+         ram_bot = ram_bot * area_bot,
+         spon_bot = spon_bot * area_bot,
+         bare_side = bare_side * area_side,
+         cca_side = cca_side * area_side,
+         ram_side = ram_side * area_side,
+         spon_side = spon_side * area_side,
+         bare_top = bare_top * area_top,
+         cca_top = cca_top * area_top,
+         ram_top = ram_top * area_top,
+         spon_top = spon_top * area_top) %>% #find area of each substratum type
+  mutate(bare = bare_bot + bare_side + bare_top,
+         cca = cca_bot + cca_side + cca_top,
+         ram = ram_bot + ram_side + ram_top,
+         spon = spon_bot + spon_side + spon_top) %>% #find total area for each type
+  group_by(container) %>%
+  summarize(bare = sum(bare),
+            cca = sum(cca),
+            ram = sum(ram),
+            spon = sum(spon),
+            total = sum(area_total)) %>% #add rubble together
+  mutate(across(c(2:5), .fns = ~./total)) %>% #divide areas by total
+  select(-total) %>% #remove total column
+  mutate(bare = replace(bare, bare == 0, 0.000000001),
+         cca = replace(cca, cca == 0, 0.000000001),
+         ram = replace(ram, ram == 0, 0.000000001),
+         spon = replace(spon, spon == 0, 0.000000001)) #replace 0's with extremely small number for electivity calculations
+
+```
+
+
+```{r export}
+write_csv(rubble_area, "rubble_area.csv") #export the rubble area df
+write_csv(patch_type_area, "patch_type_area.csv") #export the patch type area df
+```
+
+4) Calculate electivities for rubble from #2 and settlement from whatever day you want (we used day 6)
+
+5) export that data for analysis
+
+6) Calculate electivities for container from #3 and settlement from whatever day you want (we used day 6)
+
+7) export that data for analysis
+
+8) Calculate mortality rate by fitting a line through counts between day 12 and 26. The way we did it was by having the y of the fit be proportions to the max
+number of corals during that time period. For example, if the time series was 38, 44, 30, 37 corals, then the proportions would be 0.86, 1, 0.68, 0.84.
+
+9) export that data for analysis

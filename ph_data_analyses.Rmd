@@ -1,0 +1,123 @@
+---
+title: "Plexaura homomalla settlement data analyses"
+author: "Kaitlyn Tonra & Christopher D. Wells"
+date: "10/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list =  ls())
+
+library(boot) #load for bootstrapping
+library(vegan) #load for PERMANOVA
+
+library(tidyverse)
+library(grid)
+library(gridExtra)
+
+samplemedian <- function(x, d) {return(median(x[d]))} #create a bootstrapping function
+electivity_plot <- list(
+  ylim(-1,1),
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5))
+electivity_theme <- function(){
+  theme(axis.title = element_text (size = 10),
+        axis.text = element_text (size = 10, color = "black"),
+        panel.background = element_blank (),
+        panel.grid.major = element_blank (),
+        panel.grid.minor = element_blank (),
+        plot.background = element_blank (),
+        axis.line = element_line(size = 0.5, linetype = "solid", color = "black"),
+        axis.ticks = element_line(size = 0.5, linetype = "solid", color = "black"),
+        legend.position = "none")}
+bootstrap <- 10000 #number of bootstraps
+permutations <- 99999 #number of permutations
+rubble_types <- 3 #number of different rubble types in the experiment
+substratum_types <- 4 #number of substratum types from coralnet
+settlement_day <- 6 #day chosen for the settlement electivity calculations
+mortality_start <- 12 #first day to fit mortality rate to
+mortality_end <- 26 #last day to fit mortality rate to
+```
+
+```{r import}
+settlement_counts <- read_csv("settlement_counts.csv",
+                              col_types = cols(day = col_double(),
+                                               container = col_character(),
+                                               rubble_type = col_character(),
+                                               position = col_character(),
+                                               bt = col_double(),
+                                               ct = col_double(),
+                                               rt = col_double(),
+                                               ot = col_double(),
+                                               bs = col_double(),
+                                               cs = col_double(),
+                                               rs = col_double(),
+                                               os = col_double(),
+                                               bb = col_double(),
+                                               cb = col_double(),
+                                               rb = col_double(),
+                                               ob = col_double())) #number of corals on each substratum type each day (raw data)
+rubble_area <- read_csv("rubble_area.csv",
+                        col_types = cols(container = col_character(),
+                                         cca = col_double(),
+                                         bare = col_double(),
+                                         ram = col_double())) #calculated area of each rubble (from data prep)
+patch_type_area <- read_csv("patch_type_area.csv",
+                            col_types = cols(container = col_double(),
+                                             bare = col_double(),
+                                             cca = col_double(),
+                                             ram = col_double(),
+                                             spon = col_double())) #calculated area of each substratum type in a container (from data prep)
+```
+
+```{r isolate settlement day}
+day6_settlement <- settlement_counts %>%
+  mutate(bare = bt + bs + bb,
+         cca = ct + cs + cb,
+         ram = rt + rs + rb,
+         spon = ot + os + ob) %>% #add up settlers on each substratum
+  filter(day == settlement_day) %>% #isolate settlement day data
+  select(-position:-ob) #remove extra columns
+```
+
+```{r calculate rubble electivities}
+rubble_electivity <- day6_settlement %>%
+  mutate(total = bare + cca + ram + spon) %>% #get total settlers
+  group_by(container, rubble_type) %>%
+  summarize(total = sum(total)) %>% #arrange data organized by container and rubble type
+  pivot_wider(names_from = rubble_type, values_from = total) %>% #widen the table
+  merge(., rubble_area, by = "container") %>% #add the rubble_area df
+  mutate(bare = bare.x/bare.y,
+         cca = cca.x/cca.y,
+         ram = ram.x/ram.y) %>% #calculate density of settlers on each substratum
+  mutate(bare_a = bare / (bare + cca + ram),
+         cca_a = cca / (bare + cca + ram),
+         ram_a = ram / (bare + cca + ram)) %>% #calculate Chesson's alpha
+  mutate(bare_e = (bare_a - 1 / rubble_types) / (bare_a + 1 / rubble_types),
+         cca_e = (cca_a - 1 / rubble_types) / (cca_a + 1 / rubble_types),
+         ram_e = (ram_a - 1 / rubble_types) / (ram_a + 1 / rubble_types)) %>% #calculate electivities
+  select(ends_with(c("container", "e")), -bare) %>% #remove extraneous columns
+  drop_na() #drop na's (the three containers that only have one rubble type)
+```
+
+```{r calculate patch electivities}
+patch_electivity <- day6_settlement %>%
+  group_by(container) %>%
+  summarize(bare = sum(bare),
+            cca = sum(cca),
+            ram = sum(ram),
+            spon = sum(spon)) %>%
+  merge(., patch_type_area, by = "container") %>% #add the rubble_area df
+  mutate(bare = bare.x/bare.y,
+         cca = cca.x/cca.y,
+         ram = ram.x/ram.y,
+         spon = spon.x/spon.y) %>% #calculate density of settlers on each substratum
+  mutate(bare_a = bare / (bare + cca + ram + spon),
+         cca_a = cca / (bare + cca + ram + spon),
+         ram_a = ram / (bare + cca + ram + spon),
+         spon_a = spon / (bare + cca + ram + spon)) %>% #calculate Chesson's alpha
+  mutate(bare_e = (bare_a - 1 / substratum_types) / (bare_a + 1 / substratum_types),
+         cca_e = (cca_a - 1 / substratum_types) / (cca_a + 1 / substratum_types),
+         ram_e = (ram_a - 1 / substratum_types) / (ram_a + 1 / substratum_types),
+         spon_e = (spon_a - 1 / substratum_types) / (spon_a + 1 / substratum_types)) %>% #calculate electivities
+  select(ends_with(c("container", "e")), -bare) #remove extraneous columns
+```
