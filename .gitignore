@@ -39,4 +39,4 @@ vignettes/*.pdf
 .Renviron
 
 # MacOS folder metadata (?)
-.DS_store
+.DS_Store
