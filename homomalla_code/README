@@ -1,0 +1,3 @@
+Hi! 
+This file contains the code that is used to prepare this data. We're calculating the areas of the rubble pieces, converting CoralNet annotations 
+to useable percent cover data, and making CSV files that we can put into the electivity and mortality and statistical analysis codes. 
