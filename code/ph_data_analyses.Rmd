@@ -5,8 +5,13 @@ date: "10/21/2021"
 output: html_document
 ---
 
+
+This is old I think- I'm pretty sure it's just an old duplicate version of the electivities Rmd
+
 ```{r setup, include=FALSE}
 rm(list =  ls())
+knitr::opts_knit$set(root.dir = "../git/homomalla_settlement_choice")
+
 
 library(boot) #load for bootstrapping
 library(vegan) #load for PERMANOVA
@@ -38,8 +43,9 @@ mortality_start <- 12 #first day to fit mortality rate to
 mortality_end <- 26 #last day to fit mortality rate to
 ```
 
+
 ```{r import}
-settlement_counts <- read_csv("settlement_counts.csv",
+settlement_counts <- read_csv("../data/counts_raw.csv",
                               col_types = cols(day = col_double(),
                                                container = col_character(),
                                                rubble_type = col_character(),
@@ -56,18 +62,19 @@ settlement_counts <- read_csv("settlement_counts.csv",
                                                cb = col_double(),
                                                rb = col_double(),
                                                ob = col_double())) #number of corals on each substratum type each day (raw data)
-rubble_area <- read_csv("rubble_area.csv",
+rubble_area <- read_csv("rubble_area2.csv",
                         col_types = cols(container = col_character(),
                                          cca = col_double(),
                                          bare = col_double(),
                                          ram = col_double())) #calculated area of each rubble (from data prep)
-patch_type_area <- read_csv("patch_type_area.csv",
+patch_type_area <- read_csv("patch_type_area2.csv",
                             col_types = cols(container = col_double(),
                                              bare = col_double(),
                                              cca = col_double(),
                                              ram = col_double(),
                                              spon = col_double())) #calculated area of each substratum type in a container (from data prep)
 ```
+
 
 ```{r isolate settlement day}
 day6_settlement <- settlement_counts %>%
@@ -78,6 +85,7 @@ day6_settlement <- settlement_counts %>%
   filter(day == settlement_day) %>% #isolate settlement day data
   select(-position:-ob) #remove extra columns
 ```
+
 
 ```{r calculate rubble electivities}
 rubble_electivity <- day6_settlement %>%
@@ -98,6 +106,7 @@ rubble_electivity <- day6_settlement %>%
   select(ends_with(c("container", "e")), -bare) %>% #remove extraneous columns
   drop_na() #drop na's (the three containers that only have one rubble type)
 ```
+
 
 ```{r calculate patch electivities}
 patch_electivity <- day6_settlement %>%

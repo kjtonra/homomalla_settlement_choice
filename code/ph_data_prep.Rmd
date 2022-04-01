@@ -217,7 +217,7 @@ THIS STEP NEEDS TO BE EDITED IF YOU WANT TO SWITCH BETWEEN AREA CALCULATION METH
 6a. Create 'container_area' to calculate the total rubble surface area in each container. We're making this so we can add it as a column onto the next step, when we'll need the total area in each container to figure out what proportion of the total each individual rubble piece makes up. 
 ```{r calculate total available area in each container}
 # create 'container_area' which will tell us the total available area in each container (combined total areas from RAM, BARE, and CCA rubble pieces)
-container_area1 <- method1 %>%
+container_area2 <- method2 %>%
   
   # only use two of the columns- we aren't interested in top/bottom here but we need to know surface area of each rubble and what container it's in. 
   select(c("container", "area_wholerubble")) %>% 
@@ -226,19 +226,19 @@ container_area1 <- method1 %>%
   group_by(container) %>%
   summarize(area_wholecontainer = sum(area_wholerubble)) 
 
-container_area1
+container_area2
 ```
 
 6b. Create 'rubble_area2'. This step is for formatting the data in a useful way. We now have the total area in each container and we want to add a column so that each row (rubble piece) contains data about the total area in its container, so that we can divide its area_wholerubble by sum_container_area and determine what proportion of the total area is provided from each piece. 
 ```{r proportion of the whole container area provided by each rubble piece}
 # create 'rubble_area' which will tell us what proportion of the total area in each container each rubble piece is. 
-rubble_area1 <- method1 %>%
+rubble_area2 <- method2 %>%
   
 # get rid of 'area_top2' and 'area_bot2' because we don't need them, only totals.    
   select(c("container", "rubble_type", "area_wholerubble")) %>% 
   
 # combine our df 'rubble_area2' with 'container_area2'. The argument 'by = "container"' in our merge function tells it to insert the area_wholecontainer value that corresponds to the container number for each row.
-  merge(., container_area1, by = "container") %>%
+  merge(., container_area2, by = "container") %>%
 
 # divide each rubble area by the total container area to get the proportion of each container contributed by each rubble piece (i.e., relative size?).
   mutate(proportion_of_containerArea = area_wholerubble / area_wholecontainer) %>% 
@@ -249,7 +249,7 @@ rubble_area1 <- method1 %>%
 # flip the table so that containers are rows and columns are rubble types
   pivot_wider(names_from = rubble_type, values_from = proportion_of_containerArea, )
 
-rubble_area1
+rubble_area2
 ```
 
 A note for part 6:
@@ -359,9 +359,11 @@ patch_type_area1 <- proportioncover_rubble %>%
 patch_type_area1
 ```
 
-
-
-
+8. Export data so we can use it in the electivity/mortality Rmd! 
+```{r export}
+write_csv(rubble_area2, "rubble_area2.csv") #export the rubble area df
+write_csv(patch_type_area2, "patch_type_area2.csv") #export the patch type area df
+```
 
 
 
