@@ -7,14 +7,17 @@ output: html_document
 
 This script is for calculating electivity and mortality for rubble and container level analyses. 
 
-
 ```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../git/homomalla_settlement_choice")
+
 library(boot) #load for bootstrapping
 library(vegan) #load for PERMANOVA
+library(bcaboot)
 
 library(tidyverse)
 library(grid)
 library(gridExtra)
+library(ggpubr)
 
 rm(list =  ls())
 graphics.off()
@@ -46,29 +49,14 @@ mortality_end <- 26 #last day to fit mortality rate to
 ```
 
 ```{r import}
-settlement_counts <- read_csv("settlement_counts.csv",
-                              col_types = cols(day = col_double(),
-                                               container = col_character(),
-                                               rubble_type = col_character(),
-                                               position = col_character(),
-                                               bt = col_double(),
-                                               ct = col_double(),
-                                               rt = col_double(),
-                                               ot = col_double(),
-                                               bs = col_double(),
-                                               cs = col_double(),
-                                               rs = col_double(),
-                                               os = col_double(),
-                                               bb = col_double(),
-                                               cb = col_double(),
-                                               rb = col_double(),
-                                               ob = col_double())) #number of corals on each substratum type each day (raw data)
-rubble_area <- read_csv("rubble_area.csv",
+settlement_counts <- read_csv("../data/counts_raw.csv",
+                              col_types = cols(container = col_character())) #number of corals on each substratum type each day (raw data)
+rubble_area <- read_csv("../code/rubble_area2.csv",
                         col_types = cols(container = col_character(),
                                          cca = col_double(),
                                          bare = col_double(),
                                          ram = col_double())) #calculated area of each rubble (from data prep)
-patch_type_area <- read_csv("patch_type_area.csv",
+patch_type_area <- read_csv("../code/patch_type_area2.csv",
                             col_types = cols(container = col_double(),
                                              bare = col_double(),
                                              cca = col_double(),
@@ -136,14 +124,49 @@ get_electivity <- function(counts, areas){
   
 }
 
-elec <- matrix(NA, 9, 3)
+elec <- data.frame("cca", "bare", "ram")
 for(i in 1:9){
   counts <- c(rubble_merge$cca.x[i], rubble_merge$bare.x[i], rubble_merge$ram.x[i])
   areas <- c(rubble_merge$cca.y[i], rubble_merge$bare.y[i], rubble_merge$ram.y[i])
   elec[i, ] <- get_electivity(counts, areas)
 }
+
+elec.rub <- elec %>%
+  rename(cca = X.cca., bare = X.bare., ram = X.ram.) %>%
+  pivot_longer(cca:ram, names_to = "rubbletype", values_to = "electivity") %>%
+  filter(!is.na(electivity)) %>%
+  mutate(electivity = as.numeric(electivity),
+         rubbletype = as.factor(rubbletype))
+
+elec.rub
 ```
 
+```{r, fig.width = 3, fig.height = 3}
+ggdensity(elec.rub$electivity)
+ggqqplot(elec.rub$electivity)
+shapiro.test(scale(elec.rub$electivity)) #not normal
+
+kruskal.test(electivity ~ rubbletype, data = elec.rub) #kruskal-wallis
+pairwise.wilcox.test(elec.rub$electivity, elec.rub$rubbletype, p.adjust.method = "BH") #pairwise comparisons
+
+cca <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "cca"], B = 10000, func = samplemedian, verbose = FALSE)
+bar <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "bare"], B = 10000, func = samplemedian, verbose = FALSE)
+ram <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "ram"], B = 10000, func = samplemedian, verbose = FALSE)
+
+conf <- data.frame("rubbletype" = c("cca", "bare", "ram"),
+                   "median" = c(cca$B.mean[2], bar$B.mean[2], ram$B.mean[2]),
+                   "lwr" = c(cca$lims[1], bar$lims[1], ram$lims[1]),
+                   "upr" = c(cca$lims[9], bar$lims[9], ram$lims[9]))
+
+ggplot() +
+  geom_errorbar(aes(x = rubbletype, ymin = lwr, ymax = upr), conf, width = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(aes(x = rubbletype, y = median, fill = rubbletype), conf, shape = 21, color = "black", size = 3) +
+  scale_x_discrete(labels = c("Bare", "CCA", "Ramicrusta")) +
+  scale_y_continuous(limits = c(-1, 1)) +
+  labs(x = "Rubble type", y = "Electivity index") +
+  electivity_theme() #medians with 95% bias-corrected and accelerated bootstrap confidence intervals
+```
 
 
 
