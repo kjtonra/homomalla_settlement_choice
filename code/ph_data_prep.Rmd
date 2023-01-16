@@ -186,13 +186,13 @@ method1
 
 
 5. The chunk above works, but I think that the better approach here is to only use the second set of measurements (area_bot2, area_top2, perim_bot2, perim_top2) because that set was done by tracing the entire rubble perimeter, which includes side measurements. I think the best way to avoid overinflation of the side area calculations is to just take areas and perimeters that include the most area and use the CoralNet annotations to estimate the proportion of the rubble that falls into each side category. This way we are extrapolating as little as possible, whereas the other method requires taking estimates and applying a percent cover to a derived 'side' area. Even if this set of measurements is replaced later, the code should still work. 
-This chunk contains "methd 2" of area calculation- only data from one set of measurements are included, and CoralNet annotations will be used to estimate side areas instead of the heights. 
+This chunk contains "method 2" of area calculation- only data from one set of measurements are included, and CoralNet annotations will be used to estimate side areas instead of the heights. 
 The terminology here may be confusing. We took a photo of the "top" and "bottom" side of each rubble piece, but almost all of the side area was included in almost every photo because the rubble pieces were slightly rounded. We will consider all area visible in both photos to be the entire area of the rubble, and will apply CoralNet annotations to estimate how much area is top/side/bottom.  
-Although, if we aren't analyzing by top/side/bottom, this is unneccessary and calculations should only require the sum of area_top and area_bot. I think this may reasonable beacuse the rubble pieces were almost entirely visible between the two photos and not so rugose that flattening them for the sake of consistent calculations is going to misconstrue the results more than deriving the area of the sides, which in lots of cases ended up being greater than the sum of top and bottom areas (which is unreasonable inflation). 
+Although, if we aren't analyzing by top/side/bottom, this is unneccessary and calculations should only require the sum of area_top and area_bot. I think this may reasonable because the rubble pieces were almost entirely visible between the two photos and not so rugose that flattening them for the sake of consistent calculations is going to misconstrue the results more than deriving the area of the sides, which in lots of cases ended up being greater than the sum of top and bottom areas (which is unreasonable inflation). 
 
 
 ```{r}
-# create a new df called area_1 that calculates total surface areas based on an average of 3 sets of measurements
+# create a new df called method2 that calculates total surface areas based on the traced areas of top and bottom to estimate total surface area.
 method2 <- size_prep %>%
   
 # remove all extra data other than the one set (2) of measurements that we'll use here.   
@@ -201,7 +201,7 @@ method2 <- size_prep %>%
 # add a 'total' column with total area of the rubble. 
   mutate(area_wholerubble = area_bot2 + area_top2) %>%
 
-# rename "area_bot2" and "area_top2" to "area_bot" and "area_top" for consistency and ease of switching between the two. Note that this is one measurement and 'method1' area_bot and area_top are averages of 3 rounds of measurements including these.  
+# rename "area_bot2" and "area_top2" to "area_bot" and "area_top" for consistency and ease of switching between the two. Note that this is one measurement and 'method1' area_bot and area_top are averages of 3 rounds of measurements including these. However, those were less precise tracings in order to leave out "sides".
   rename(area_bot = area_bot2,
          area_top = area_top2)
 

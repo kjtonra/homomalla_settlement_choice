@@ -57,14 +57,14 @@ rubble_area <- read_csv("../code/rubble_area2.csv",
                         col_types = cols(container = col_character(),
                                          cca = col_double(),
                                          bare = col_double(),
-                                         ram = col_double())) #calculated area of each rubble (from data prep)
+                                         ram = col_double())) #calculated area of each rubble (from data prep). Called rubble_area2 to correspond with method2
 
 patch_type_area <- read_csv("../code/patch_type_area2.csv",
                             col_types = cols(container = col_double(),
                                              bare = col_double(),
                                              cca = col_double(),
                                              ram = col_double(),
-                                             spon = col_double())) #calculated area of each substratum type in a container (from data prep)
+                                             spon = col_double())) #calculated area of each substratum type in a container (from data prep). Called patch_type_area2 to correspond with method2. 
 ```
 
 Isolate day 6 settlement so we can use it later for electivity calculation. This includes data for both rubble level and patch level analyses.
