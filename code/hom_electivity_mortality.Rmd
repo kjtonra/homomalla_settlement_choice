@@ -57,7 +57,7 @@ Import the data and rename. These are pulling data that use the second method of
 ```{r import}
 
 #number of corals on each substratum type each day (raw data)
-settlement_counts <- read_csv("../data/counts_raw.csv",
+settlement_counts <- read.csv("../data/counts_raw.csv",
                               col_types = cols(container = col_character())) 
 
 #calculated area of each rubble (from data prep). Called rubble_area2 to correspond with method2
@@ -103,7 +103,7 @@ Arrange the data so it's in the right shape for calculating electivities.
 rubble_electivity_df <- 
   
 # Add a column to get total settlers in each container   
-     mutate(day6_settlement, total = bare + cca + ram + spon) %>% 
+     mutate(day6_settlement_counts, total = bare + cca + ram + spon) %>% 
   
 # This just changes the class type so we can use it later
      group_by(container, rubble_type)  %>% 
@@ -148,6 +148,8 @@ get_electivity <- function(counts, areas){
 
 Time to apply that function! 
 ```{r Apply get_electivity}
+
+elec <- data.frame("cca", "bare", "ram")
 
 for(i in 1:9){
   counts <- c(rubble_electivity_df$cca.count[i], rubble_electivity_df$bare.count[i], rubble_electivity_df$ram.count[i])
