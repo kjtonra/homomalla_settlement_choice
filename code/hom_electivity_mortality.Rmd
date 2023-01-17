@@ -7,7 +7,9 @@ output: html_document
 
 This script is for calculating electivity and mortality for rubble and container level analyses. 
 
+Setup chunk: Includes packages, plot style, and definitions for important variables 
 ```{r setup, include=FALSE}
+
 knitr::opts_knit$set(root.dir = "../git/homomalla_settlement_choice")
 
 library(boot) #load for bootstrapping
@@ -22,8 +24,10 @@ library(ggpubr)
 rm(list =  ls())
 graphics.off()
 
-samplemedian <- function(x, d) {return(median(x[d]))} #create a bootstrapping function
+# Create a bootstrapping function
+samplemedian <- function(x, d) {return(median(x[d]))} 
 
+# Define styles for making plots later
 electivity_plot <- list(
   ylim(-1,1),
   geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5))
@@ -39,6 +43,7 @@ electivity_theme <- function(){
         axis.ticks = element_line(size = 0.5, linetype = "solid", color = "black"),
         legend.position = "none")}
 
+# Setup for calculating electivities (define parameters)
 bootstrap <- 10000 #number of bootstraps
 permutations <- 99999 #number of permutations
 rubble_types <- 3 #number of different rubble types in the experiment
@@ -50,47 +55,69 @@ mortality_end <- 26 #last day to fit mortality rate to
 
 Import the data and rename. These are pulling data that use the second method of area calculations. 
 ```{r import}
-settlement_counts <- read_csv("../data/counts_raw.csv",
-                              col_types = cols(container = col_character())) #number of corals on each substratum type each day (raw data)
 
+#number of corals on each substratum type each day (raw data)
+settlement_counts <- read_csv("../data/counts_raw.csv",
+                              col_types = cols(container = col_character())) 
+
+#calculated area of each rubble (from data prep). Called rubble_area2 to correspond with method2
 rubble_area <- read_csv("../code/rubble_area2.csv",
                         col_types = cols(container = col_character(),
                                          cca = col_double(),
                                          bare = col_double(),
-                                         ram = col_double())) #calculated area of each rubble (from data prep). Called rubble_area2 to correspond with method2
+                                         ram = col_double())) 
 
+#calculated area of each substratum type in a container (from data prep). Called patch_type_area2 to correspond with method2. 
 patch_type_area <- read_csv("../code/patch_type_area2.csv",
                             col_types = cols(container = col_double(),
                                              bare = col_double(),
                                              cca = col_double(),
                                              ram = col_double(),
-                                             spon = col_double())) #calculated area of each substratum type in a container (from data prep). Called patch_type_area2 to correspond with method2. 
+                                             spon = col_double())) 
 ```
 
-Isolate day 6 settlement so we can use it later for electivity calculation. This includes data for both rubble level and patch level analyses.
+Isolate day 6 settlement counts so we can use it later for electivity calculation. This includes data for both rubble level and patch level analyses.
 ```{r isolate settlement day}
-day6_settlement <- settlement_counts %>%
+
+day6_settlement_counts <- settlement_counts %>%
+  
+#add up settlers on each substratum
   mutate(bare = bt + bs + bb,
          cca = ct + cs + cb,
          ram = rt + rs + rb,
-         spon = ot + os + ob) %>% #add up settlers on each substratum
-  filter(day == settlement_day) %>% #isolate settlement day data
-  select(-position:-ob) #remove extra columns
+         spon = ot + os + ob) %>% 
+  
+#isolate settlement day data  
+  filter(day == settlement_day) %>% 
 
-day6_settlement
+  #remove extra columns  
+  select(-position:-ob) 
+
+
+day6_settlement_counts
 ```
 
 Arrange the data so it's in the right shape for calculating electivities. 
 ```{r}
-rubble_electivity_df <- mutate(day6_settlement, total = bare + cca + ram + spon) %>% # Add a column to get total settlers in each container 
+
+rubble_electivity_df <- 
   
-                        group_by(container, rubble_type) %>% # This just changes the class type so we can use it later
+# Add a column to get total settlers in each container   
+     mutate(day6_settlement, total = bare + cca + ram + spon) %>% 
+  
+# This just changes the class type so we can use it later
+     group_by(container, rubble_type) %>% 
                   
-                        summarize(total = sum(total)) %>% # Arrange data organized by container and rubble type
-                  
-                        pivot_wider(names_from = rubble_type, values_from = total) %>% # Change the shape of the dataframe
-                
-                        merge(rubble_area, by = "container") # Add the rubble_area dataframe so we can use it for electivities
+# Arrange data organized by container and rubble type  
+     summarize(total = sum(total)) %>% 
+  
+# Change the shape of the dataframe                 
+     pivot_wider(names_from = rubble_type, values_from = total) %>% 
+  
+# Add the rubble_area dataframe so we can use it for electivities                
+     merge(rubble_area, by = "container") 
+
+rubble_electivity_df
                         
 ```
 
@@ -115,6 +142,9 @@ get_electivity <- function(counts, areas){
   
 }
 
+
+
+```
 elec <- data.frame("cca", "bare", "ram")
 for(i in 1:9){
   counts <- c(rubble_merge$cca.x[i], rubble_merge$bare.x[i], rubble_merge$ram.x[i])
