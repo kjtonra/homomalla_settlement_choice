@@ -25,7 +25,7 @@ rm(list =  ls())
 graphics.off()
 
 # Create a bootstrapping function
-samplemedian <- function(x, d) {return(median(x[d]))} 
+samplemean <- function(x, d) {return(mean(x[d]))} 
 
 # Define styles for making plots later
 electivity_plot <- list(
@@ -53,11 +53,12 @@ mortality_start <- 12 #first day to fit mortality rate to
 mortality_end <- 26 #last day to fit mortality rate to
 ```
 
+
 Import the data and rename. These are pulling data that use the second method of area calculations. 
 ```{r import}
 
 #number of corals on each substratum type each day (raw data)
-settlement_counts <- read.csv("../data/counts_raw.csv",
+settlement_counts <- read_csv("../data/counts_raw.csv",
                               col_types = cols(container = col_character())) 
 
 #calculated area of each rubble (from data prep). Called rubble_area2 to correspond with method2
@@ -75,6 +76,7 @@ patch_type_area <- read_csv("../code/patch_type_area2.csv",
                                              ram = col_double(),
                                              spon = col_double())) 
 ```
+
 
 Isolate day 6 settlement counts so we can use it later for electivity calculation. This includes data for both rubble level and patch level analyses.
 ```{r isolate settlement day}
@@ -97,7 +99,7 @@ day6_settlement_counts <- settlement_counts %>%
 day6_settlement_counts
 ```
 
-Arrange the data so it's in the right shape for calculating electivities. 
+Arrange the data so it's in the right shape for calculating electivities on the rubble scale. 
 ```{r}
 
 rubble_electivity_df <- 
@@ -117,13 +119,58 @@ rubble_electivity_df <-
 # Add the rubble_area dataframe so we can use it for electivities.                  
      merge(rubble_area, 
            by = "container", # Assign the correct area to each container
-           suffixes = c(".count", ".areaprop")) # Label resulting columns that represent counts and proportion areas
-  
+           suffixes = c(".count", ".areaprop")) %>%# Label resulting columns that represent counts and proportion areas
+
+# Get rid of singles
+  filter(container != 4,
+            container != 1,
+            container != 6)
 
 
 rubble_electivity_df
                         
 ```
+
+
+Arrange the data so it's in the right shape for calculating electivities on the patch (container) scale. 
+```{r}
+
+patch_electivity_df <- day6_settlement_counts %>%
+  
+# Add a column to get total settlers in each container   
+   #  mutate(day6_settlement_counts, total = bare + cca + ram + spon) %>% 
+  
+
+# Change the shape of the dataframe                 
+     pivot_longer(bare:spon, names_to = "patch_type", values_to = "num_individuals") %>% 
+
+# This just changes the class type so we can use it later
+     group_by(container, patch_type) %>% 
+                  
+# Arrange data organized by container and rubble type  
+     summarize(total = sum(num_individuals), .groups = "drop") %>% 
+    
+# Flip wide again
+     pivot_wider(names_from = patch_type, values_from = total) %>%
+  
+# Add the rubble_area dataframe so we can use it for electivities.                  
+     merge(patch_type_area, 
+           by = "container", # Assign the correct area to each container
+           suffixes = c(".count", ".areaprop")) %>% # Label resulting columns that represent counts and proportion areas
+
+# Get rid of single rubble containers
+     
+     filter(container != 4,
+            container != 1,
+            container != 6)
+    
+  
+
+
+patch_electivity_df
+                        
+```
+
 
 This chunk creates a function to calculate electivity based on the values assigned at the top of the Rmd. 
 ```{r Create function to calculate electivity}
@@ -146,12 +193,13 @@ get_electivity <- function(counts, areas){
 
 ```
 
-Time to apply that function! 
+
+Time to apply that function! This one is for Rubble level electivities. 
 ```{r Apply get_electivity}
 
 elec <- data.frame("cca", "bare", "ram")
 
-for(i in 1:9){
+for(i in 1:6){
   counts <- c(rubble_electivity_df$cca.count[i], rubble_electivity_df$bare.count[i], rubble_electivity_df$ram.count[i])
   areas <- c(rubble_electivity_df$cca.areaprop[i], rubble_electivity_df$bare.areaprop[i], rubble_electivity_df$ram.areaprop[i])
   elec[i, ] <- get_electivity(counts, areas)
@@ -168,9 +216,41 @@ elec.rub
 
 ```
 
+Time to apply that function! This one is for container (patch) level electivities. 
+```{r Apply get_electivity}
 
+elec <- data.frame("cca", "bare", "ram", "spon")
 
+for(i in 1:6){
+  counts <- c(patch_electivity_df$cca.count[i], 
+              patch_electivity_df$bare.count[i], 
+              patch_electivity_df$ram.count[i], 
+              patch_electivity_df$spon.count[i])
+  
+  areas <- c(patch_electivity_df$cca.areaprop[i], 
+             patch_electivity_df$bare.areaprop[i], 
+             patch_electivity_df$ram.areaprop[i], 
+             patch_electivity_df$spon.areaprop[i])
+  
+  elec[i, ] <- get_electivity(counts, areas)
+}
+
+elec
+
+  elec.patch <- elec %>%
+  rename(cca = X.cca., bare = X.bare., ram = X.ram., spon = X.spon.) %>%
+  pivot_longer(cca:spon, names_to = "patchtype", values_to = "electivity") %>%
+  filter(!is.na(electivity)) %>%
+  mutate(electivity = as.numeric(electivity),
+         patchtype = as.factor(patchtype))
+
+elec.patch
+
+```
+
+Stats and graphs for rubble type electivity 
 ```{r, fig.width = 3, fig.height = 3}
+
 ggdensity(elec.rub$electivity)
 ggqqplot(elec.rub$electivity)
 shapiro.test(scale(elec.rub$electivity)) #not normal
@@ -178,9 +258,9 @@ shapiro.test(scale(elec.rub$electivity)) #not normal
 kruskal.test(electivity ~ rubbletype, data = elec.rub) #kruskal-wallis
 pairwise.wilcox.test(elec.rub$electivity, elec.rub$rubbletype, p.adjust.method = "BH") #pairwise comparisons
 
-cca <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "cca"], B = 10000, func = samplemedian, verbose = FALSE)
-bar <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "bare"], B = 10000, func = samplemedian, verbose = FALSE)
-ram <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "ram"], B = 10000, func = samplemedian, verbose = FALSE)
+cca <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "cca"], B = 10000, func = samplemean, verbose = FALSE)
+bar <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "bare"], B = 10000, func = samplemean, verbose = FALSE)
+ram <- bcajack(elec.rub$electivity[elec.rub$rubbletype == "ram"], B = 10000, func = samplemean, verbose = FALSE)
 
 conf <- data.frame("rubbletype" = c("cca", "bare", "ram"),
                    "median" = c(cca$B.mean[2], bar$B.mean[2], ram$B.mean[2]),
@@ -197,6 +277,36 @@ ggplot() +
   electivity_theme() #medians with 95% bias-corrected and accelerated bootstrap confidence intervals
 ```
 
+Stats and graphs for container /patch type electivity 
+
+```{r, fig.width = 3, fig.height = 3}
+
+ggdensity(elec.patch$electivity)
+ggqqplot(elec.patch$electivity)
+shapiro.test(scale(elec.patch$electivity)) #not normal
+
+kruskal.test(electivity ~ patchtype, data = elec.patch) #kruskal-wallis
+pairwise.wilcox.test(elec.patch$electivity, elec.patch$patchtype, p.adjust.method = "BH") #pairwise comparisons
+
+cca <- bcajack(elec.patch$electivity[elec.patch$patchtype == "cca"], B = 10000, func = samplemean, verbose = FALSE)
+bar <- bcajack(elec.patch$electivity[elec.patch$patchtype == "bare"], B = 10000, func = samplemean, verbose = FALSE)
+ram <- bcajack(elec.patch$electivity[elec.patch$patchtype == "ram"], B = 10000, func = samplemean, verbose = FALSE)
+spo <- bcajack(elec.patch$electivity[elec.patch$patchtype == "spon"], B = 10000, func = samplemean, verbose = FALSE)
+
+conf <- data.frame("patchtype" = c("cca", "bare", "ram", "spo"),
+                   "median" = c(cca$B.mean[2], bar$B.mean[2], ram$B.mean[2], spo$B.mean[2]),
+                   "lwr" = c(cca$lims[1], bar$lims[1], ram$lims[1], spo$lims[1]),
+                   "upr" = c(cca$lims[9], bar$lims[9], ram$lims[9], spo$lims[9]))
+
+ggplot() +
+  geom_errorbar(aes(x = patchtype, ymin = lwr, ymax = upr), conf, width = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(aes(x = patchtype, y = median, fill = patchtype), conf, shape = 21, color = "black", size = 3) +
+  scale_x_discrete(labels = c("Bare", "CCA", "Ramicrusta", "Sponge")) +
+  scale_y_continuous(limits = c(-1, 1)) +
+  labs(x = "Patch type", y = "Electivity index") +
+  electivity_theme() #medians with 95% bias-corrected and accelerated bootstrap confidence intervals
+```
 
 
 ```{r Calculate electivity (old)}
