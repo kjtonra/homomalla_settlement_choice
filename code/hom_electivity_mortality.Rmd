@@ -39,8 +39,8 @@ electivity_theme <- function(){
         panel.grid.major = element_blank (),
         panel.grid.minor = element_blank (),
         plot.background = element_blank (),
-        axis.line = element_line(size = 0.5, linetype = "solid", color = "black"),
-        axis.ticks = element_line(size = 0.5, linetype = "solid", color = "black"),
+        axis.line = element_line(linewidth = 0.5, linetype = "solid", color = "black"),
+        axis.ticks = element_line(linewidth = 0.5, linetype = "solid", color = "black"),
         legend.position = "none")}
 
 # Setup for calculating electivities (define parameters)
@@ -81,16 +81,16 @@ Isolate day 6 settlement counts so we can use it later for electivity calculatio
 
 day6_settlement_counts <- settlement_counts %>%
   
-#add up settlers on each substratum
+# Add up settlers on each substratum
   mutate(bare = bt + bs + bb,
          cca = ct + cs + cb,
          ram = rt + rs + rb,
          spon = ot + os + ob) %>% 
   
-#isolate settlement day data  
+# Isolate settlement day data  
   filter(day == settlement_day) %>% 
 
-  #remove extra columns  
+# Remove extra columns  
   select(-position:-ob) 
 
 
@@ -106,7 +106,7 @@ rubble_electivity_df <-
      mutate(day6_settlement, total = bare + cca + ram + spon) %>% 
   
 # This just changes the class type so we can use it later
-     group_by(container, rubble_type) %>% 
+     group_by(container, rubble_type)  %>% 
                   
 # Arrange data organized by container and rubble type  
      summarize(total = sum(total)) %>% 
@@ -114,22 +114,24 @@ rubble_electivity_df <-
 # Change the shape of the dataframe                 
      pivot_wider(names_from = rubble_type, values_from = total) %>% 
   
-# Add the rubble_area dataframe so we can use it for electivities                
-     merge(rubble_area, by = "container") 
+# Add the rubble_area dataframe so we can use it for electivities.                  
+     merge(rubble_area, 
+           by = "container", # Assign the correct area to each container
+           suffixes = c(".count", ".areaprop")) # Label resulting columns that represent counts and proportion areas
+  
+
 
 rubble_electivity_df
                         
 ```
 
+This chunk creates a function to calculate electivity based on the values assigned at the top of the Rmd. 
+```{r Create function to calculate electivity}
 
-```{r Calculate electivity}
-#this chunk calculates electivites...
-
-# function to calculate electivities 
 get_electivity <- function(counts, areas){
   
   densities <- counts / areas
-  
+
   total_density <- sum(densities)
   
   proportions <- densities / total_density    #i.e. Chesson's alpha
@@ -142,13 +144,14 @@ get_electivity <- function(counts, areas){
   
 }
 
-
-
 ```
-elec <- data.frame("cca", "bare", "ram")
+
+Time to apply that function! 
+```{r Apply get_electivity}
+
 for(i in 1:9){
-  counts <- c(rubble_merge$cca.x[i], rubble_merge$bare.x[i], rubble_merge$ram.x[i])
-  areas <- c(rubble_merge$cca.y[i], rubble_merge$bare.y[i], rubble_merge$ram.y[i])
+  counts <- c(rubble_electivity_df$cca.count[i], rubble_electivity_df$bare.count[i], rubble_electivity_df$ram.count[i])
+  areas <- c(rubble_electivity_df$cca.areaprop[i], rubble_electivity_df$bare.areaprop[i], rubble_electivity_df$ram.areaprop[i])
   elec[i, ] <- get_electivity(counts, areas)
 }
 
@@ -160,7 +163,10 @@ elec.rub <- elec %>%
          rubbletype = as.factor(rubbletype))
 
 elec.rub
+
 ```
+
+
 
 ```{r, fig.width = 3, fig.height = 3}
 ggdensity(elec.rub$electivity)
