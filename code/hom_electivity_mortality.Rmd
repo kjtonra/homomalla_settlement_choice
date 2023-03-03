@@ -95,8 +95,11 @@ day6_settlement_counts <- settlement_counts %>%
 # Remove extra columns  
   select(-position:-ob) 
 
-
+# View
 day6_settlement_counts
+
+# Needed this for just a sec
+write.csv(day6_settlement_counts, "settlement.csv")
 ```
 
 Arrange the data so it's in the right shape for calculating electivities on the rubble scale. 
