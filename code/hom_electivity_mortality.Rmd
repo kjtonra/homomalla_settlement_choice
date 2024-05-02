@@ -219,7 +219,7 @@ elec.rub
 
 ```
 
-Time to apply that function! This one is for container (patch) level electivities. 
+Time to apply that function! This one is for container (patch) level electivities. :)
 ```{r Apply get_electivity}
 
 elec <- data.frame("cca", "bare", "ram", "spon")
