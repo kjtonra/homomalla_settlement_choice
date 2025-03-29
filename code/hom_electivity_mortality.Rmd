@@ -532,6 +532,8 @@ ggplot(tenday_mortality, aes(x = patch, y = mean, fill = day, group = day)) +
                         values = c("6" = "#137054",
                                    "16" = "#54A7A2")) +
   
+  scale_y_continuous(limits = c(0, 50), oob = scales::squish) +
+  
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
