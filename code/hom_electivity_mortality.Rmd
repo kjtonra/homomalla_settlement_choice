@@ -32,16 +32,16 @@ electivity_plot <- list(
   ylim(-1,1),
   geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.5))
 
-electivity_theme <- function(){
-  theme(axis.title = element_text (size = 10),
-        axis.text = element_text (size = 10, color = "black"),
-        panel.background = element_blank (),
-        panel.grid.major = element_blank (),
-        panel.grid.minor = element_blank (),
-        plot.background = element_blank (),
-        axis.line = element_line(linewidth = 0.5, linetype = "solid", color = "black"),
-        axis.ticks = element_line(linewidth = 0.5, linetype = "solid", color = "black"),
-        legend.position = "none")}
+electivity_theme <- function() {
+  theme_minimal() +   theme(axis.title = element_text (size = 10),
+                      axis.text = element_text (size = 10, color = "black"),
+                      panel.background = element_blank (),
+                      panel.grid.major = element_blank (),
+                      panel.grid.minor = element_blank (),
+                      plot.background = element_blank (),
+                      axis.line = element_line(linewidth = 0.5, linetype = "solid", color = "black"),
+                      axis.ticks = element_line(linewidth = 0.5, linetype = "solid", color = "black"))
+  }
 
 # Setup for calculating electivities (define parameters)
 bootstrap <- 10000 #number of bootstraps
@@ -51,6 +51,24 @@ substratum_types <- 4 #number of substratum types from coralnet
 settlement_day <- 6 #day chosen for the settlement electivity calculations
 mortality_start <- 12 #first day to fit mortality rate to
 mortality_end <- 26 #last day to fit mortality rate to
+
+singles <- c(1, 4, 6)
+
+
+custom_labels <- c(
+  "bare" = "Bare",
+  "cca" = "CCA",
+  "ram" = "Ramicrusta",
+  "spo" = "Sponge",
+  "spon" = "Sponge"
+)
+
+custom_colors <- c(
+  "bare" = "#ECC498", 
+  "cca" = "#DC7177", 
+  "ram" = "#C4501b", 
+  "spo" = "#548E91",
+  "spon" = "#548E91")
 ```
 
 
@@ -59,7 +77,9 @@ Import the data and rename. These are pulling data that use the second method of
 
 #number of corals on each substratum type each day (raw data)
 settlement_counts <- read_csv("../data/counts_raw.csv",
-                              col_types = cols(container = col_character())) 
+                              col_types = cols(container = col_character())) %>%
+  filter(!container %in% singles)
+
 
 #calculated area of each rubble (from data prep). Called rubble_area2 to correspond with method2
 rubble_area <- read_csv("../code/rubble_area2.csv",
@@ -105,10 +125,10 @@ write.csv(day6_settlement_counts, "settlement.csv")
 Arrange the data so it's in the right shape for calculating electivities on the rubble scale. 
 ```{r}
 
-rubble_electivity_df <- 
+rubble_electivity_df <- day6_settlement_counts %>%
   
 # Add a column to get total settlers in each container   
-     mutate(day6_settlement_counts, total = bare + cca + ram + spon) %>% 
+     mutate(total = bare + cca + ram + spon) %>% 
   
 # This just changes the class type so we can use it later
      group_by(container, rubble_type)  %>% 
@@ -122,13 +142,7 @@ rubble_electivity_df <-
 # Add the rubble_area dataframe so we can use it for electivities.                  
      merge(rubble_area, 
            by = "container", # Assign the correct area to each container
-           suffixes = c(".count", ".areaprop")) %>%# Label resulting columns that represent counts and proportion areas
-
-# Get rid of singles
-  filter(container != 4,
-            container != 1,
-            container != 6)
-
+           suffixes = c(".count", ".areaprop"))# Label resulting columns that represent counts and proportion areas
 
 rubble_electivity_df
                         
@@ -159,17 +173,9 @@ patch_electivity_df <- day6_settlement_counts %>%
 # Add the rubble_area dataframe so we can use it for electivities.                  
      merge(patch_type_area, 
            by = "container", # Assign the correct area to each container
-           suffixes = c(".count", ".areaprop")) %>% # Label resulting columns that represent counts and proportion areas
-
-# Get rid of single rubble containers
-     
-     filter(container != 4,
-            container != 1,
-            container != 6)
+           suffixes = c(".count", ".areaprop")) # Label resulting columns that represent counts and proportion areas
     
   
-
-
 patch_electivity_df
                         
 ```
@@ -278,12 +284,12 @@ ggplot() +
   scale_y_continuous(limits = c(-1, 1)) +
   labs(x = "Rubble type", y = "Electivity index") +
   electivity_theme() #medians with 95% bias-corrected and accelerated bootstrap confidence intervals
+
 ```
 
 Stats and graphs for container /patch type electivity 
 
 ```{r, fig.width = 3, fig.height = 3}
-
 ggdensity(elec.patch$electivity)
 ggqqplot(elec.patch$electivity)
 shapiro.test(scale(elec.patch$electivity)) #not normal
@@ -300,16 +306,200 @@ conf <- data.frame("patchtype" = c("cca", "bare", "ram", "spo"),
                    "median" = c(cca$B.mean[2], bar$B.mean[2], ram$B.mean[2], spo$B.mean[2]),
                    "lwr" = c(cca$lims[1], bar$lims[1], ram$lims[1], spo$lims[1]),
                    "upr" = c(cca$lims[9], bar$lims[9], ram$lims[9], spo$lims[9]))
-
-ggplot() +
-  geom_errorbar(aes(x = patchtype, ymin = lwr, ymax = upr), conf, width = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_point(aes(x = patchtype, y = median, fill = patchtype), conf, shape = 21, color = "black", size = 3) +
-  scale_x_discrete(labels = c("Bare", "CCA", "Ramicrusta", "Sponge")) +
-  scale_y_continuous(limits = c(-1, 1)) +
-  labs(x = "Patch type", y = "Electivity index") +
-  electivity_theme() #medians with 95% bias-corrected and accelerated bootstrap confidence intervals
 ```
+
+Electivity fig!
+```{r, fig.width = 3, fig.height = 3}
+ggplot() +
+  geom_errorbar(aes(x = patchtype, ymin = lwr, ymax = upr), conf, width = 0.3) + #medians with 95% bias-corrected and accelerated bootstrap confidence intervals
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(aes(x = patchtype, y = median, fill = patchtype), conf, shape = 21, color = "black", size = 4) + 
+  
+  scale_x_discrete(labels = custom_labels) +
+  scale_y_continuous(limits = c(-1, 1)) +
+  labs(x = "Substratum type", y = "Electivity index (E*)") +
+  scale_fill_manual(values = custom_colors) +
+  electivity_theme() + 
+  theme(legend.position = "none")
+
+ggsave("patch_electivity_medians.tiff", dpi = 600)
+
+```
+
+
+Counts data and prep for all count figs
+```{r}
+long_counts <- settlement_counts %>%
+  
+# Add up settlers on each substratum type
+  mutate(bare = bt + bs + bb,
+         cca = ct + cs + cb,
+         ram = rt + rs + rb,
+         spon = ot + os + ob) %>% 
+  
+# remove extra cols  
+  select(day, container, bare:spon) %>%
+  
+# Make longer (add cols for patch and counts)
+  pivot_longer(cols = c(bare, cca, ram, spon), names_to = "patch", values_to = "polyps")
+
+
+
+alltime_counts <- long_counts %>%
+  group_by(patch, day) %>%
+# Calculate mean polyps per patch type per day with CIs
+    summarize(
+    sum_polyps = sum(polyps),
+    avg_polyps = mean(polyps),  # Average number of polyps
+    se_polyps = sd(polyps) / sqrt(n()),  # Standard error
+    ci_lower = avg_polyps - 1.96 * se_polyps,  # Lower bound of 95% CI
+    ci_upper = avg_polyps + 1.96 * se_polyps,  # Upper bound of 95% CI
+    .groups = "drop"
+  )
+```
+
+
+All polyps over time
+```{r}
+ggplot(alltime_counts, aes(x = day, y = sum_polyps, color = patch, group = patch)) +
+  
+  geom_line(size = 1) +  
+  geom_point(size = 3) +  
+  labs(
+    x = "Day",
+    y = "Number of polyps",
+    title = "Total Polyps per Substratum Type",
+    color = "Patch Type",
+    fill = "Patch Type"
+  ) +
+  
+  scale_color_manual(values = custom_colors, 
+                     labels = custom_labels) + 
+  
+  scale_x_continuous(breaks = unique(alltime_counts$day)) +
+
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(size = 16)
+  ) +
+  
+  electivity_theme()
+
+ggsave("total_polyps_all_days.tiff", dpi = 600, height = 6, width = 10)
+```
+
+Mean polyps over time with 95% CIs
+```{r}
+ggplot(alltime_counts, aes(x = day, y = avg_polyps, color = patch, group = patch)) +
+  
+# 95% CI ribbons, line, points
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = patch), alpha = 0.2) +  
+  geom_line(size = 1) +  
+  geom_point(size = 3) + 
+  
+  labs(
+    x = "Day",
+    y = "Mean number of polyps",
+    title = "Mean Polyps per Substratum Type",
+    color = "Patch Type",
+    fill = "Patch Type"
+  ) +
+ 
+# Use custom colors for lines and fill
+  scale_color_manual(labels = custom_labels, values = custom_colors) +  
+  scale_fill_manual(labels = custom_labels, values = custom_colors) +  
+
+# Use default colors
+#  scale_color_discrete(labels = custom_labels) +  
+#  scale_fill_discrete(labels = custom_labels) + 
+  
+# Days as X breaks  
+  scale_x_continuous(breaks = unique(alltime_counts$day)) +  
+  
+  theme_minimal() +  
+  theme(
+    legend.position = "right",  
+    axis.title = element_text(size = 14),  
+    axis.text = element_text(size = 12),  
+    plot.title = element_text(size = 16)  
+  ) +
+  
+  electivity_theme()  
+
+
+
+ggsave("mean_polyps_all_days1.tiff", dpi = 600, height = 6, width = 10)
+```
+
+Mortality props
+```{r}
+mortality_props <- alltime_counts %>%
+  
+  select(day, patch, sum_polyps, avg_polyps) %>%
+  filter(day > 3) %>%
+  filter(day < 17) %>%
+  arrange(patch, day)%>%
+  group_by(patch) %>%
+
+  mutate(prop_remaining = case_when(day == 6 ~ 1,  # Day 6 is first day
+    TRUE ~ avg_polyps / lag(avg_polyps)  # Otherwise calculate the ratio of avg_polyps to the lag of avg_polyps
+  ))
+```
+
+Polyp mortality after Day 6
+```{r}
+ggplot(mortality_props, aes(x = day, y = prop_remaining, color = patch, group = patch)) +
+  geom_line(size = 1) +  
+  geom_point(size = 3) +  
+  
+  labs(
+    x = "Day",
+    y = "Proportion of Settled Polyps Remaining",
+    title = "Proportion of surviving polyps",
+    color = "Patch Type",
+    fill = "Patch Type"
+  ) +
+  
+    scale_color_manual(values = custom_colors, 
+                     labels = custom_labels) +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(size = 16)
+  )
+
+ggsave("10day_mortality.tiff", dpi = 600)
+```
+For binomial:
+```{r}
+binom_data <- long_counts %>%
+  
+  filter(day > 3) %>%
+  filter(day < 17) %>%
+  arrange(container, day, patch)
+
+
+
+
+#%>%
+  group_by(patch) %>%
+
+  mutate(prop_remaining = case_when(day == 6 ~ 1,  # Day 6 is first day
+    TRUE ~ polyps / lag(polyps)  # Otherwise calculate the ratio of avg_polyps to the lag of avg_polyps
+  ))
+```
+```
+
+
+
+
+
 
 
 ```{r Calculate electivity (old)}
