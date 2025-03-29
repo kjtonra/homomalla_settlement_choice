@@ -474,28 +474,70 @@ ggplot(mortality_props, aes(x = day, y = prop_remaining, color = patch, group = 
     plot.title = element_text(size = 16)
   )
 
-ggsave("10day_mortality.tiff", dpi = 600)
+ggsave("10day_mortality_proportions.tiff", dpi = 600)
 ```
-For binomial:
+For 10 day mortality figs:
 ```{r}
-binom_data <- long_counts %>%
+mort_days <- c(6, 16)
+
+tenday_mortality <- long_counts %>%
+  filter(day %in% mort_days) %>%
+  group_by(container, patch, day) %>%
+  summarize(polyps_total = sum(polyps), .groups = 'drop') %>%
+  ungroup() %>%
+  group_by(day, patch) %>%
+  summarize(mean = mean(polyps_total),
+            total = sum(polyps_total),
+              se = sd(polyps_total) / sqrt(n()),      # Standard error
+              ci_lower = mean - 1.96 * se,  # Lower bound 95% CI
+              ci_upper = mean + 1.96 * se) %>% # Upper bound 95% CI) 
+  mutate(day = as.factor(day))
+           
+```
+
+
+```{r}
+ggplot(tenday_mortality, aes(x = patch, y = total, fill = day, group = day)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+#  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), 
+          #      position = position_dodge(width = 0.8), 
+       #         width = 0.25) +
+  labs(x = "Patch", y = "Number of Polyps", 
+       fill = "Days after settlement", title = "Total Number of Polyps per Patch Type") +
   
-  filter(day > 3) %>%
-  filter(day < 17) %>%
-  arrange(container, day, patch)
+      scale_x_discrete(labels = custom_labels) +
+      scale_fill_manual(labels = c("6" = "1",
+                                   "16" = "10"),
+                        values = c("6" = "#137054",
+                                   "16" = "#54A7A2")) +
+  
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
-
-
-#%>%
-  group_by(patch) %>%
-
-  mutate(prop_remaining = case_when(day == 6 ~ 1,  # Day 6 is first day
-    TRUE ~ polyps / lag(polyps)  # Otherwise calculate the ratio of avg_polyps to the lag of avg_polyps
-  ))
-```
+ggsave("total_polyps_10day_survival.tiff", dpi = 600, height = 6, width = 10)
 ```
 
+```{r}
+ggplot(tenday_mortality, aes(x = patch, y = mean, fill = day, group = day)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), 
+               position = position_dodge(width = 0.8), 
+               width = 0.25) +
+  labs(x = "Patch", y = "Mean Number of Polyps", 
+       fill = "Days after settlement", title = "Mean Number of Polyps per Patch Type") +
+  
+      scale_x_discrete(labels = custom_labels) +
+      scale_fill_manual(labels = c("6" = "1",
+                                   "16" = "10"),
+                        values = c("6" = "#137054",
+                                   "16" = "#54A7A2")) +
+  
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("mean_polyps_10day_survival.tiff", dpi = 600, height = 6, width = 10)
+
+```
 
 
 
