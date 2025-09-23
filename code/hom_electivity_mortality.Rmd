@@ -65,8 +65,8 @@ custom_labels <- c(
 
 custom_colors <- c(
   "bare" = "#ECC498", 
-  "cca" = "#DC7177", 
-  "ram" = "#C4501b", 
+  "cca" = "#FF87AB", 
+  "ram" = "#FF781f", 
   "spo" = "#548E91",
   "spon" = "#548E91")
 ```
@@ -320,7 +320,9 @@ ggplot() +
   labs(x = "Substratum type", y = "Electivity index (E*)") +
   scale_fill_manual(values = custom_colors) +
   electivity_theme() + 
-  theme(legend.position = "none")
+  theme(legend.position = "none") + 
+  theme(text = element_text(size = 18))
+        
 
 ggsave("patch_electivity_medians.tiff", dpi = 600)
 
@@ -393,10 +395,10 @@ ggsave("total_polyps_all_days.tiff", dpi = 600, height = 6, width = 10)
 
 Mean polyps over time with 95% CIs
 ```{r}
-ggplot(alltime_counts, aes(x = day, y = avg_polyps, color = patch, group = patch)) +
+ggplot(alltime_counts, aes(x = day, y = avg_polyps, color = patch, group = patch, shape = patch)) +
   
 # 95% CI ribbons, line, points
-  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = patch), alpha = 0.2) +  
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = patch), alpha = 0.2, show.legend = FALSE) +  
   geom_line(size = 1) +  
   geom_point(size = 3) + 
   
@@ -404,8 +406,7 @@ ggplot(alltime_counts, aes(x = day, y = avg_polyps, color = patch, group = patch
     x = "Day",
     y = "Mean number of polyps",
     title = "Mean Polyps per Substratum Type",
-    color = "Patch Type",
-    fill = "Patch Type"
+    color = "Substratum"
   ) +
  
 # Use custom colors for lines and fill
@@ -422,10 +423,14 @@ ggplot(alltime_counts, aes(x = day, y = avg_polyps, color = patch, group = patch
   theme_minimal() +  
   theme(
     legend.position = "right",  
-    axis.title = element_text(size = 14),  
-    axis.text = element_text(size = 12),  
+    axis.title = element_text(size = 16),  
+    axis.text = element_text(size = 16),  
     plot.title = element_text(size = 16)  
   ) +
+  
+  guides(color = guide_legend("Substratum"),
+         fill  = "none",
+         shape = "none") +
   
   electivity_theme()  
 
